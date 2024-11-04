@@ -24,13 +24,16 @@ var (
 
 type Collector struct {
 	sync.Mutex
-	numDevices  prometheus.Gauge
-	usedMemory  *prometheus.GaugeVec
-	totalMemory *prometheus.GaugeVec
-	dutyCycle   *prometheus.GaugeVec
-	powerUsage  *prometheus.GaugeVec
-	temperature *prometheus.GaugeVec
-	fanSpeed    *prometheus.GaugeVec
+	numDevices    prometheus.Gauge
+	usedMemory    *prometheus.GaugeVec
+	totalMemory   *prometheus.GaugeVec
+	dutyCycle     *prometheus.GaugeVec
+	powerUsage    *prometheus.GaugeVec
+	temperature   *prometheus.GaugeVec
+	fanSpeed      *prometheus.GaugeVec
+	graphicsClock *prometheus.GaugeVec
+	memoryClock   *prometheus.GaugeVec
+	smClock       *prometheus.GaugeVec
 }
 
 func NewCollector() *Collector {
@@ -90,6 +93,30 @@ func NewCollector() *Collector {
 			},
 			labels,
 		),
+		graphicsClock: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Name:      "graphics_clock_mhz",
+				Help:      "Graphics clock of the GPU device in MHz",
+			},
+			labels,
+		),
+		memoryClock: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Name:      "memory_clock_mhz",
+				Help:      "Memory clock of the GPU device in MHz",
+			},
+			labels,
+		),
+		smClock: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Name:      "sm_clock_mhz",
+				Help:      "SM clock of the GPU device in MHz",
+			},
+			labels,
+		),
 	}
 }
 
@@ -101,6 +128,9 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	c.powerUsage.Describe(ch)
 	c.temperature.Describe(ch)
 	c.fanSpeed.Describe(ch)
+	c.graphicsClock.Describe(ch)
+	c.memoryClock.Describe(ch)
+	c.smClock.Describe(ch)
 }
 
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
@@ -114,6 +144,9 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	c.powerUsage.Reset()
 	c.temperature.Reset()
 	c.fanSpeed.Reset()
+	c.graphicsClock.Reset()
+	c.memoryClock.Reset()
+	c.smClock.Reset()
 
 	numDevices, err := gonvml.DeviceCount()
 	if err != nil {
@@ -185,6 +218,15 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		} else {
 			c.fanSpeed.WithLabelValues(minor, uuid, name).Set(float64(fanSpeed))
 		}
+
+		graphicsClock, memoryClock, smClock, err := dev.ClockInfo()
+		if err != nil {
+			log.Printf("ClockInfo() error: %v", err)
+		} else {
+			c.graphicsClock.WithLabelValues(minor, uuid, name).Set(float64(graphicsClock))
+			c.memoryClock.WithLabelValues(minor, uuid, name).Set(float64(memoryClock))
+			c.smClock.WithLabelValues(minor, uuid, name).Set(float64(smClock))
+		}
 	}
 	c.usedMemory.Collect(ch)
 	c.totalMemory.Collect(ch)
@@ -192,6 +234,9 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	c.powerUsage.Collect(ch)
 	c.temperature.Collect(ch)
 	c.fanSpeed.Collect(ch)
+	c.graphicsClock.Collect(ch)
+	c.memoryClock.Collect(ch)
+	c.smClock.Collect(ch)
 }
 
 func main() {

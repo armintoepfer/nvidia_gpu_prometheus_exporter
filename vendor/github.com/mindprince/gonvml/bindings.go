@@ -145,6 +145,14 @@ nvmlReturn_t nvmlDeviceGetDecoderUtilization(nvmlDevice_t device, unsigned int* 
 
 nvmlReturn_t (*nvmlDeviceGetSamplesFunc)(nvmlDevice_t device, nvmlSamplingType_t type, unsigned long long lastSeenTimeStamp, nvmlValueType_t *sampleValType, unsigned int *sampleCount, nvmlSample_t *samples);
 
+nvmlReturn_t (*nvmlDeviceGetClockInfoFunc)(nvmlDevice_t device, nvmlClockType_t type, unsigned int* clock);
+nvmlReturn_t nvmlDeviceGetClockInfo(nvmlDevice_t device, nvmlClockType_t type, unsigned int* clock) {
+    if (nvmlDeviceGetClockInfoFunc == NULL) {
+        return NVML_ERROR_FUNCTION_NOT_FOUND;
+    }
+    return nvmlDeviceGetClockInfoFunc(device, type, clock);
+}
+
 // Loads the "libnvidia-ml.so.1" shared library.
 // Loads all symbols needed and initializes NVML.
 // Call this before calling any other methods.
@@ -219,6 +227,10 @@ nvmlReturn_t nvmlInit_dl(void) {
   }
   nvmlDeviceGetDecoderUtilizationFunc = dlsym(nvmlHandle, "nvmlDeviceGetDecoderUtilization");
   if (nvmlDeviceGetDecoderUtilizationFunc == NULL) {
+    return NVML_ERROR_FUNCTION_NOT_FOUND;
+  }
+  nvmlDeviceGetClockInfoFunc = dlsym(nvmlHandle, "nvmlDeviceGetClockInfo");
+  if (nvmlDeviceGetClockInfoFunc == NULL) {
     return NVML_ERROR_FUNCTION_NOT_FOUND;
   }
   nvmlReturn_t result = nvmlInitFunc();
@@ -521,4 +533,31 @@ func (d Device) DecoderUtilization() (uint, uint, error) {
 	var sp C.uint
 	r := C.nvmlDeviceGetDecoderUtilization(d.dev, &n, &sp)
 	return uint(n), uint(sp), errorString(r)
+}
+
+// ClockInfo returns the clock information for the device.
+func (d Device) ClockInfo() (uint, uint, uint, error) {
+	if C.nvmlHandle == nil {
+		return 0, 0, 0, errLibraryNotLoaded
+	}
+
+	var graphics C.uint
+	r := C.nvmlDeviceGetClockInfo(d.dev, C.NVML_CLOCK_GRAPHICS, &graphics)
+	if r != C.NVML_SUCCESS {
+		return 0, 0, 0, errorString(r)
+	}
+
+	var memory C.uint
+	r = C.nvmlDeviceGetClockInfo(d.dev, C.NVML_CLOCK_MEM, &memory)
+	if r != C.NVML_SUCCESS {
+		return 0, 0, 0, errorString(r)
+	}
+
+	var sm C.uint
+	r = C.nvmlDeviceGetClockInfo(d.dev, C.NVML_CLOCK_SM, &sm)
+	if r != C.NVML_SUCCESS {
+		return 0, 0, 0, errorString(r)
+	}
+
+	return uint(graphics), uint(memory), uint(sm), nil
 }
